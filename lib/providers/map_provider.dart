@@ -1,5 +1,7 @@
 // lib/providers/map_provider.dart
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -7,6 +9,7 @@ import 'package:path_planning/api/api_service.dart';
 import 'package:path_planning/models/map_data.dart';
 import 'package:path_planning/models/obstacle.dart';
 import 'package:path_planning/utils/geo_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum DrawingMode { none, boundary, obstacleRect, obstacleCircle, setStart, setEnd }
 
@@ -51,6 +54,47 @@ class MapProvider extends ChangeNotifier {
 
   MapProvider() {
     _determinePosition();
+    _loadMapsFromPrefs(); // Load maps when the app starts
+  }
+
+  Future<void> _saveMapsToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Prefix to easily identify map keys
+    const mapPrefix = 'map_'; 
+    
+    // First, clear old map data to handle deletions if you add that feature
+    final keys = prefs.getKeys();
+    for (String key in keys) {
+      if (key.startsWith(mapPrefix)) {
+        await prefs.remove(key);
+      }
+    }
+
+    // Now, save the current maps
+    _savedMaps.forEach((name, mapData) {
+      final key = '$mapPrefix$name';
+      final mapJson = json.encode(mapData.toJson());
+      prefs.setString(key, mapJson);
+    });
+  }
+
+  Future<void> _loadMapsFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    const mapPrefix = 'map_';
+    final keys = prefs.getKeys();
+    
+    _savedMaps.clear(); // Clear the current in-memory map
+
+    for (String key in keys) {
+      if (key.startsWith(mapPrefix)) {
+        final mapJson = prefs.getString(key);
+        if (mapJson != null) {
+          final mapData = MapData.fromJson(json.decode(mapJson));
+          _savedMaps[mapData.name] = mapData;
+        }
+      }
+    }
+    notifyListeners(); // Update UI with loaded maps
   }
 
   Future<void> _determinePosition() async {
@@ -159,6 +203,9 @@ class MapProvider extends ChangeNotifier {
     final mapData = MapData(
         name: name, boundary: _boundary!, obstacles: List.from(_obstacles));
     _savedMaps[name] = mapData;
+    
+    _saveMapsToPrefs(); // Call the new save method
+    
     notifyListeners();
   }
   

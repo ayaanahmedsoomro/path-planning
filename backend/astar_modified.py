@@ -107,21 +107,30 @@ class AStarPlanner:
         current_index = 0
 
         while current_index < len(path) - 1:
-            best_next_index = -1
+            best_next_index = current_index + 1  # Default to the next point
+            
+            # Try to find the farthest point we can reach without collision
             for next_index in range(len(path) - 1, current_index, -1):
                 p1 = self.Node(path[current_index][0], path[current_index][1], 0, -1)
                 p2 = self.Node(path[next_index][0], path[next_index][1], 0, -1)
-                if self.is_collision_free(p1, p2):
-                    best_next_index = next_index
-                    break
-            
-            if best_next_index != -1:
-                pruned_path.append(path[best_next_index])
-                current_index = best_next_index
-            else:
-                current_index += 1
-                pruned_path.append(path[current_index])
                 
+                # Add intermediate checks to ensure the entire path is safe
+                if self.is_collision_free(p1, p2):
+                    # Additional check: verify that intermediate points don't get too close to obstacles
+                    is_safe = True
+                    for i in range(current_index + 1, next_index):
+                        intermediate_node = self.Node(path[i][0], path[i][1], 0, -1)
+                        if not self.verify_node(intermediate_node):
+                            is_safe = False
+                            break
+                    
+                    if is_safe:
+                        best_next_index = next_index
+                        break
+            
+            pruned_path.append(path[best_next_index])
+            current_index = best_next_index
+                    
         return pruned_path
     
     def is_point_inside_rectangle(self, point, rect_points):
@@ -147,27 +156,41 @@ class AStarPlanner:
         p1 = Point(start_node.x, start_node.y)
         q1 = Point(end_node.x, end_node.y)
 
+        # Add a safety margin to avoid getting too close to obstacles
+        safety_margin = self.resolution * 0.5
+        
         for obs in self.obstacles:
             if obs['type'] == 'rectangle':
                 if is_point_check:
                     if self.is_point_inside_rectangle(p1, obs['points']):
-                        return False # Point is inside a rectangle
+                        return False  # Point is inside a rectangle
                 else:
                     rect_points = obs['points']
+                    # Check if the line segment intersects with any edge of the rectangle
                     for i in range(4):
                         p2 = Point(rect_points[i][0], rect_points[i][1])
                         q2 = Point(rect_points[(i + 1) % 4][0], rect_points[(i + 1) % 4][1])
                         if doIntersect(p1, q1, p2, q2):
                             return False
+                    
+                    # Additional check: if the line is completely inside the obstacle
+                    if self.is_point_inside_rectangle(p1, obs['points']) and self.is_point_inside_rectangle(q1, obs['points']):
+                        return False
 
             elif obs['type'] == 'circle':
                 center_x, center_y = obs['center']
-                radius = obs['radius']
+                radius = obs['radius'] + safety_margin  # Add safety margin
                 
+                # Check if start point is inside the circle
                 if ((p1.x - center_x)**2 + (p1.y - center_y)**2) <= radius**2:
+                    return False
+                    
+                # Check if end point is inside the circle
+                if ((q1.x - center_x)**2 + (q1.y - center_y)**2) <= radius**2:
                     return False
 
                 if not is_point_check:
+                    # Check if the line segment intersects the circle
                     dx = q1.x - p1.x
                     dy = q1.y - p1.y
                     fx = p1.x - center_x
@@ -182,16 +205,37 @@ class AStarPlanner:
                         t1 = (-b - discriminant) / (2*a) if a != 0 else -1
                         t2 = (-b + discriminant) / (2*a) if a != 0 else -1
                         
-                        if (t1 >= 0 and t1 <= 1) or (t2 >= 0 and t2 <= 1):
+                        # Check if the intersection points are within the segment
+                        if (0 <= t1 <= 1) or (0 <= t2 <= 1):
                             return False
         return True
 
     def verify_node(self, node):
+        # Check if node is within boundaries
         if not (self.min_x <= node.x <= self.max_x and self.min_y <= node.y <= self.max_y):
             return False
 
-        if not self.is_collision_free(node, node):
-            return False
+        # Check if node is too close to any obstacle
+        safety_margin = self.resolution * 0.5
+        
+        for obs in self.obstacles:
+            if obs['type'] == 'rectangle':
+                # Create a slightly expanded rectangle for safety check
+                rect_points = obs['points']
+                min_x = min(p[0] for p in rect_points) - safety_margin
+                max_x = max(p[0] for p in rect_points) + safety_margin
+                min_y = min(p[1] for p in rect_points) - safety_margin
+                max_y = max(p[1] for p in rect_points) + safety_margin
+                
+                if min_x <= node.x <= max_x and min_y <= node.y <= max_y:
+                    return False
+                    
+            elif obs['type'] == 'circle':
+                center_x, center_y = obs['center']
+                radius = obs['radius'] + safety_margin
+                
+                if ((node.x - center_x)**2 + (node.y - center_y)**2) <= radius**2:
+                    return False
         
         return True
 

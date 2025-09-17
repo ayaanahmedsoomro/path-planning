@@ -1,6 +1,5 @@
 // lib/models/map_data.dart
 
-
 import 'package:latlong2/latlong.dart';
 import 'package:path_planning/models/obstacle.dart';
 
@@ -21,16 +20,34 @@ class MapData {
 
   Map<String, dynamic> toJson() {
     return {
+      'name': name, // Also save the name
       'boundary': boundary.toJson(),
       'obstacles': obstacles.map((o) => o.toJson()).toList(),
-      'start': {
+      'start': startPoint != null ? {
         'latitude': startPoint!.latitude,
         'longitude': startPoint!.longitude
-      },
-      'goal': {
+      } : null,
+      'goal': endPoint != null ? {
         'latitude': endPoint!.latitude,
         'longitude': endPoint!.longitude
-      },
+      } : null,
     };
+  }
+
+  // Create a MapData object from a JSON map (NEW)
+  factory MapData.fromJson(Map<String, dynamic> json) {
+    return MapData(
+      name: json['name'],
+      boundary: Obstacle.fromJson(json['boundary']),
+      obstacles: (json['obstacles'] as List)
+          .map((o) => Obstacle.fromJson(o))
+          .toList(),
+      startPoint: json['start'] != null 
+          ? LatLng(json['start']['latitude'], json['start']['longitude']) 
+          : null,
+      endPoint: json['goal'] != null 
+          ? LatLng(json['goal']['latitude'], json['goal']['longitude']) 
+          : null,
+    );
   }
 }
