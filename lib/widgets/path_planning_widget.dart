@@ -11,6 +11,14 @@ class PathPlanningWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final mapProvider = Provider.of<MapProvider>(context);
 
+    Widget buildLoadingIndicator() {
+      return const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -45,19 +53,30 @@ class PathPlanningWidget extends StatelessWidget {
           const SizedBox(height: 16),
           const Text('Path Planning using:', style: TextStyle(fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: mapProvider.isLoading ? null : mapProvider.calculatePath,
+          ElevatedButton.icon(
+            icon: const Icon(Icons.star_border),
+            onPressed: mapProvider.isLoading ? null : () => mapProvider.calculatePath(PlanningAlgorithm.aStar),
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 40)),
-            child: mapProvider.isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+            label: (mapProvider.isLoading && mapProvider.loadingAlgorithm == PlanningAlgorithm.aStar)
+                ? buildLoadingIndicator()
                 : const Text('A* Algorithm'),
           ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.memory),
+            onPressed: mapProvider.isLoading ? null : () => mapProvider.calculatePath(PlanningAlgorithm.dynamicProgramming),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 40)),
+             label: (mapProvider.isLoading && mapProvider.loadingAlgorithm == PlanningAlgorithm.dynamicProgramming)
+                ? buildLoadingIndicator()
+                : const Text('Dynamic Programming'),
+          ),
+
           if (mapProvider.errorMessage.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
@@ -69,8 +88,8 @@ class PathPlanningWidget extends StatelessWidget {
           const SizedBox(height: 16),
           TextButton(
             onPressed: mapProvider.clearAll,
-            child: const Text('Clear All', style: TextStyle(color: Colors.red)),
             style: TextButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+            child: const Text('Clear All', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

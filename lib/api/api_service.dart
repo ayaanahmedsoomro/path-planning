@@ -9,8 +9,8 @@ import 'package:path_planning/models/map_data.dart';
 class ApiService {
   final String _baseUrl = 'http://127.0.0.1:5000';
 
-  Future<Map<String, dynamic>> getPath(MapData mapData) async {
-    final url = Uri.parse('$_baseUrl/plan-path');
+  Future<Map<String, dynamic>> _getPathFromEndpoint(String endpoint, MapData mapData) async {
+    final url = Uri.parse('$_baseUrl/$endpoint');
     final headers = {"Content-Type": "application/json"};
     final body = json.encode(mapData.toJson());
 
@@ -30,11 +30,20 @@ class ApiService {
 
         return {'path': path, 'pruned_path': prunedPath};
       } else {
+         final error = json.decode(response.body);
         throw Exception(
-            'Failed to get path. Status code: ${response.statusCode}');
+            'Failed to get path: ${error['error'] ?? 'Unknown error'}. Status code: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Error connecting to the server: $e');
     }
+  }
+
+  Future<Map<String, dynamic>> getPath(MapData mapData) {
+    return _getPathFromEndpoint('plan-path', mapData);
+  }
+
+  Future<Map<String, dynamic>> getPathWithDP(MapData mapData) {
+    return _getPathFromEndpoint('plan-path-dp', mapData);
   }
 }

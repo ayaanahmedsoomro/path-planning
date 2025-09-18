@@ -1,5 +1,3 @@
-// lib/providers/map_provider.dart
-
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -12,6 +10,7 @@ import 'package:path_planning/utils/geo_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum DrawingMode { none, boundary, obstacleRect, obstacleCircle, setStart, setEnd }
+enum PlanningAlgorithm { aStar, dynamicProgramming }
 
 class MapProvider extends ChangeNotifier {
   DrawingMode _drawingMode = DrawingMode.none;
@@ -37,6 +36,9 @@ class MapProvider extends ChangeNotifier {
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+  
+  PlanningAlgorithm? _loadingAlgorithm;
+  PlanningAlgorithm? get loadingAlgorithm => _loadingAlgorithm;
 
   String _errorMessage = '';
   String get errorMessage => _errorMessage;
@@ -59,10 +61,8 @@ class MapProvider extends ChangeNotifier {
 
   Future<void> _saveMapsToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    // Prefix to easily identify map keys
     const mapPrefix = 'map_'; 
     
-    // First, clear old map data to handle deletions if you add that feature
     final keys = prefs.getKeys();
     for (String key in keys) {
       if (key.startsWith(mapPrefix)) {
@@ -70,7 +70,6 @@ class MapProvider extends ChangeNotifier {
       }
     }
 
-    // Now, save the current maps
     _savedMaps.forEach((name, mapData) {
       final key = '$mapPrefix$name';
       final mapJson = json.encode(mapData.toJson());
@@ -83,7 +82,7 @@ class MapProvider extends ChangeNotifier {
     const mapPrefix = 'map_';
     final keys = prefs.getKeys();
     
-    _savedMaps.clear(); // Clear the current in-memory map
+    _savedMaps.clear();
 
     for (String key in keys) {
       if (key.startsWith(mapPrefix)) {
@@ -94,7 +93,7 @@ class MapProvider extends ChangeNotifier {
         }
       }
     }
-    notifyListeners(); // Update UI with loaded maps
+    notifyListeners();
   }
 
   Future<void> _determinePosition() async {
@@ -204,7 +203,7 @@ class MapProvider extends ChangeNotifier {
         name: name, boundary: _boundary!, obstacles: List.from(_obstacles));
     _savedMaps[name] = mapData;
     
-    _saveMapsToPrefs(); // Call the new save method
+    _saveMapsToPrefs();
     
     notifyListeners();
   }
@@ -218,7 +217,7 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void calculatePath() async {
+  void calculatePath(PlanningAlgorithm algorithm) async {
     if (_startPoint == null || _endPoint == null || _boundary == null) {
       _errorMessage = 'Please set a boundary, start, and end point.';
       notifyListeners();
@@ -226,6 +225,7 @@ class MapProvider extends ChangeNotifier {
     }
 
     _isLoading = true;
+    _loadingAlgorithm = algorithm;
     _errorMessage = '';
     _unprunedPath = [];
     _prunedPath = [];
@@ -240,13 +240,17 @@ class MapProvider extends ChangeNotifier {
     );
     
     try {
-      final result = await _apiService.getPath(mapData);
+      final result = algorithm == PlanningAlgorithm.aStar
+          ? await _apiService.getPath(mapData)
+          : await _apiService.getPathWithDP(mapData);
+          
       _unprunedPath = result['path']!;
       _prunedPath = result['pruned_path']!;
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
       _isLoading = false;
+      _loadingAlgorithm = null;
       notifyListeners();
     }
   }
@@ -270,6 +274,7 @@ class MapProvider extends ChangeNotifier {
     _prunedPath = [];
     _tempStartPoint = null;
     _isLoading = false;
+    _loadingAlgorithm = null;
     _errorMessage = '';
     notifyListeners();
   }
